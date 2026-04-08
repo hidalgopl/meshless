@@ -3,7 +3,7 @@ version: "2"
 run:
   timeout: 3m
   go: "1.25"
-  version: "v2.1.0"
+  version: "v2.11.4"
 
 linters:
   enable:
