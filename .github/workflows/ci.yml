@@ -10,7 +10,7 @@ env:
   GO_VERSION: "1.25"
   SETUP_ENVTEST_VERSION: "v0.20.4"
   ENVTEST_K8S_VERSION: "1.35.0"
-  GOLANGCI_LINT_VERSION: "v2.0.2"
+  GOLANGCI_LINT_VERSION: "v2.1.0"
 
 jobs:
   lint:
@@ -68,7 +68,7 @@ jobs:
 
       - name: Install envtest
         run: |
-          go install sigs.k8s.io/controller-runtime/cmd/setup-envtest@${SETUP_ENVTEST_VERSION}
+          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@${SETUP_ENVTEST_VERSION}
           echo "KUBEBUILDER_ASSETS=$(setup-envtest use -p path ${ENVTEST_K8S_VERSION})" >> "$GITHUB_ENV"
 
       - run: go test -mod=vendor -v -count=1 -timeout 120s ./test/integration/...
