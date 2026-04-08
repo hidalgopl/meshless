@@ -3,7 +3,6 @@ version: "2"
 run:
   timeout: 3m
   go: "1.25"
-  version: "v2.11.4"
 
 linters:
   enable:
@@ -11,12 +10,13 @@ linters:
     - govet
     - staticcheck
     - unused
-    - gosimple
     - ineffassign
     - misspell
+
+formatters:
+  enable:
     - gofmt
     - goimports
-
-issues:
-  exclude-dirs:
-    - test/e2e
+  exclusions:
+    paths:
+      - test/e2e
