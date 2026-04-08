@@ -1,0 +1,23 @@
+version: "2"
+
+run:
+  timeout: 3m
+  go: "1.25"
+  version: "v2.0.2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - misspell
+    - gofmt
+    - goimports
+
+issues:
+  exclude-dirs:
+    - test/e2e

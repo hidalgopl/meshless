@@ -1,0 +1,41 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.25"
+  VCLUSTER_VERSION: "v0.23.0"
+  VCLUSTER_SHA256_AMD64: "f5d23f17e6bcb5b8c8d21570d51a424c7582927ada6d3e899a9e02bd9e244821"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ vars.GO_VERSION }}
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ vars.GO_VERSION }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ vars.GO_VERSION }}-
+
+      - name: Install vcluster ${{ vars.VCLUSTER_VERSION }}
+        run: |
+          curl -L -o /usr/local/bin/vcluster \
+            "https://github.com/loft-sh/vcluster/releases/download/${{ vars.VCLUSTER_VERSION }}/vcluster-linux-amd64"
+          chmod +x /usr/local/bin/vcluster
+          echo "${{ vars.VCLUSTER_SHA256_AMD64 }}  /usr/local/bin/vcluster" | sha256sum --check
+          vcluster version
+
+      - name: Run e2e tests
+        run: go test -mod=vendor -tags e2e -v -count=1 -timeout 30m ./test/e2e/

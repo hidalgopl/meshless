@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-{{.ClusterName}}
+  namespace: {{.Namespace}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-{{.ClusterName}}
+  template:
+    metadata:
+      labels:
+        app: nginx-{{.ClusterName}}
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "hello from {{.ClusterName}}" > /usr/share/nginx/html/index.html
+          nginx -g "daemon off;"
