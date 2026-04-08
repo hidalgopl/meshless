@@ -2,6 +2,7 @@ package endpoint
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/hidalgopl/meshless/internal/cluster"
 	"github.com/hidalgopl/meshless/internal/discover"
@@ -11,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/kubernetes"
-	"log/slog"
 )
 
 const (
@@ -248,6 +248,7 @@ func BuildEndpointSlice(nsName types.NamespacedName, provider discover.Observati
 	}
 }
 
+//nolint:staticcheck // corev1.Endpoints is intentionally supported via --sync-endpoints flag
 func BuildEndpoints(nsName types.NamespacedName, provider discover.Observation) *corev1.Endpoints {
 	addresses := make([]corev1.EndpointAddress, 0, len(provider.Addresses))
 	for _, addr := range provider.Addresses {

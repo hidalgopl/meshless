@@ -3,12 +3,12 @@ package discover
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/hidalgopl/meshless/internal/cluster"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"log/slog"
 )
 
 type Observation struct {

@@ -1,3 +1,4 @@
+//nolint:staticcheck // corev1.Endpoints intentionally used for --sync-endpoints tests
 package integration
 
 import (

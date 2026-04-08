@@ -1,3 +1,4 @@
+//nolint:staticcheck // corev1.Endpoints intentionally used for --sync-endpoints tests
 package integration
 
 import (
@@ -54,7 +55,9 @@ func startTestEnv(t *testing.T) *testEnv {
 		if latest == "" {
 			t.Skip("no envtest versions found")
 		}
-		os.Setenv("KUBEBUILDER_ASSETS", filepath.Join(base, latest))
+		if err := os.Setenv("KUBEBUILDER_ASSETS", filepath.Join(base, latest)); err != nil {
+			t.Fatalf("set KUBEBUILDER_ASSETS: %v", err)
+		}
 	}
 
 	e := &envtest.Environment{}
@@ -69,7 +72,7 @@ func startTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("failed to create kubernetes client: %v", err)
 	}
 
-	t.Cleanup(func() { e.Stop() })
+	t.Cleanup(func() { _ = e.Stop() })
 
 	return &testEnv{env: e, client: client}
 }
