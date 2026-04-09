@@ -36,10 +36,26 @@ jobs:
           vcluster version
           vcluster use driver docker
 
+      - name: Write vcluster values
+        run: |
+          cat > /tmp/vcluster-values.yaml <<'EOF'
+          experimental:
+            docker:
+              # Privileged mode required for kernel modules (bridge, br_netfilter)
+              # used by the standalone join-node for pod networking.
+              args:
+                - "--privileged"
+              # Disable load balancer and registry proxy to reduce memory footprint.
+              loadBalancer:
+                enabled: false
+              registryProxy:
+                enabled: false
+          EOF
+
       - name: Warm up vcluster (D-Bus race workaround)
         run: |
           echo "Creating warm-up cluster to initialize D-Bus..."
-          vcluster create _warmup --driver docker --connect=false || true
+          vcluster create _warmup --driver docker --connect=false -f /tmp/vcluster-values.yaml || true
 
           CONTAINER=$(docker ps -q --filter "name=vcluster" --filter "status=running" 2>/dev/null | head -1)
           if [ -z "$CONTAINER" ]; then
@@ -64,13 +80,13 @@ jobs:
           echo "Warm-up complete"
 
       - name: Create meshless-a
-        run: vcluster create meshless-a --driver docker --connect=false
+        run: vcluster create meshless-a --driver docker --connect=false -f /tmp/vcluster-values.yaml
 
       - name: Create meshless-b
-        run: vcluster create meshless-b --driver docker --connect=false
+        run: vcluster create meshless-b --driver docker --connect=false -f /tmp/vcluster-values.yaml
 
       - name: Create meshless-c
-        run: vcluster create meshless-c --driver docker --connect=false
+        run: vcluster create meshless-c --driver docker --connect=false -f /tmp/vcluster-values.yaml
 
       - name: Run e2e tests
         run: go test -mod=vendor -tags e2e -v -count=1 -timeout 30m ./test/e2e/

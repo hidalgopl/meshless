@@ -114,11 +114,13 @@ func (e *Environment) CreateCluster(name string) *Cluster {
 
 	// Create cluster without connecting (don't pollute local kubeconfig).
 	// Use --connect=false to skip automatic connection.
-	// The --set flag configures the Docker network.
+	// --privileged is required for the standalone join-node to load kernel
+	// modules (bridge, br_netfilter) for pod networking.
 	run(e.t,
 		vclusterBinary, "create", name,
 		"--driver", "docker",
 		"--connect=false",
+		"--set", "experimental.docker.args[0]=--privileged",
 		"--set", fmt.Sprintf("experimental.docker.network=%s", e.NetworkName),
 	)
 
