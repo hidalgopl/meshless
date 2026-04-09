@@ -6,8 +6,6 @@ on:
 
 env:
   GO_VERSION: "1.25"
-  VCLUSTER_VERSION: "v0.33.1"
-  VCLUSTER_SHA256_AMD64: "bed0e91223996ce469b60187d9ec9191987d2b7ea4b785bba9fa6ace7616dfe8"
 
 jobs:
   e2e:
@@ -29,13 +27,22 @@ jobs:
           restore-keys: |
             go-${{ runner.os }}-${{ env.GO_VERSION }}-
 
-      - name: Install vcluster ${{ env.VCLUSTER_VERSION }}
-        run: |
-          curl -L -o /usr/local/bin/vcluster \
-            "https://github.com/loft-sh/vcluster/releases/download/${VCLUSTER_VERSION}/vcluster-linux-amd64"
-          chmod +x /usr/local/bin/vcluster
-          echo "${VCLUSTER_SHA256_AMD64}  /usr/local/bin/vcluster" | sha256sum --check
-          vcluster version
+      - uses: loft-sh/setup-vind@v1
+        with:
+          name: meshless-a
+          version: v0.31.0
+
+      - uses: loft-sh/setup-vind@v1
+        with:
+          name: meshless-b
+          version: v0.31.0
+
+      - uses: loft-sh/setup-vind@v1
+        with:
+          name: meshless-c
+          version: v0.31.0
 
       - name: Run e2e tests
         run: go test -mod=vendor -tags e2e -v -count=1 -timeout 30m ./test/e2e/
+        env:
+          MESHLESS_CLUSTER_NAMES: "meshless-a,meshless-b,meshless-c"

@@ -28,6 +28,10 @@ var (
 	vclusterBinary = envOr("MESHLESS_VCLUSTER_BIN", "/usr/local/bin/vcluster")
 	goBinary       = envOr("MESHLESS_GO_BIN", "go")
 	kubectlBinary  = envOr("MESHLESS_KUBECTL_BIN", "kubectl")
+
+	// When set, clusters are pre-provisioned (e.g., by setup-vind in CI).
+	// CreateCluster will connect to existing clusters instead of creating new ones.
+	preprovisionedClusters = envOr("MESHLESS_CLUSTER_NAMES", "")
 )
 
 func envOr(key, fallback string) string {
@@ -71,29 +75,41 @@ type Environment struct {
 
 // NewEnvironment creates a shared Docker network and prepares a temp directory
 // for kubeconfigs. Does not create any clusters yet.
+// In CI mode (MESHLESS_CLUSTER_NAMES set), skips network creation and uses
+// the default kubeconfig.
 func NewEnvironment(t *testing.T, networkPrefix string) *Environment {
 	t.Helper()
 
-	networkName := networkPrefix + "-" + randomSuffix(t)
-	kubeconfigDir := t.TempDir()
-
 	env := &Environment{
-		NetworkName:   networkName,
-		KubeconfigDir: kubeconfigDir,
-		t:             t,
+		t: t,
 	}
 
-	t.Cleanup(func() {
-		env.teardown()
-	})
+	if preprovisionedClusters == "" {
+		env.NetworkName = networkPrefix + "-" + randomSuffix(t)
+		env.KubeconfigDir = t.TempDir()
+
+		t.Cleanup(func() {
+			env.teardown()
+		})
+	} else {
+		home, _ := os.UserHomeDir()
+		env.KubeconfigDir = filepath.Join(home, ".kube")
+	}
 
 	return env
 }
 
 // CreateCluster creates a single vind cluster in the shared Docker network
 // and retrieves its kubeconfig.
+// In CI mode (MESHLESS_CLUSTER_NAMES set), connects to an existing cluster
+// and extracts its kubeconfig from the default kubeconfig file.
 func (e *Environment) CreateCluster(name string) *Cluster {
 	e.t.Helper()
+
+	if preprovisionedClusters != "" {
+		return e.connectToExistingCluster(name)
+	}
+
 	e.t.Logf("creating vind cluster %s (network: %s)", name, e.NetworkName)
 
 	// Create cluster without connecting (don't pollute local kubeconfig).
@@ -316,6 +332,51 @@ func (e *Environment) CurlFromCluster(cluster *Cluster, curlerPod, url string, t
 
 		return string(out)
 	}
+}
+
+func (e *Environment) connectToExistingCluster(name string) *Cluster {
+	e.t.Helper()
+	e.t.Logf("connecting to pre-provisioned cluster %s", name)
+
+	defaultKubeconfig := filepath.Join(e.KubeconfigDir, "config")
+
+	out := runOutput(e.t,
+		vclusterBinary, "connect", name,
+		"--driver", "docker",
+		"--print",
+		"--silent",
+		"--kubeconfig", defaultKubeconfig,
+	)
+
+	kubeconfigPath := filepath.Join(e.KubeconfigDir, name+".yaml")
+	if err := os.WriteFile(kubeconfigPath, out, 0o644); err != nil {
+		e.t.Fatalf("failed to write kubeconfig for %s: %v", name, err)
+	}
+
+	config, err := clientcmd.Load(out)
+	if err != nil {
+		e.t.Fatalf("failed to parse kubeconfig for %s: %v", name, err)
+	}
+
+	restConfig, err := clientcmd.NewDefaultClientConfig(*config, nil).ClientConfig()
+	if err != nil {
+		e.t.Fatalf("failed to create rest config for %s: %v", name, err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		e.t.Fatalf("failed to create kubernetes client for %s: %v", name, err)
+	}
+
+	cluster := &Cluster{
+		Name:           name,
+		KubeconfigPath: kubeconfigPath,
+		Client:         clientset,
+		RawConfig:      *config,
+	}
+	e.Clusters = append(e.Clusters, cluster)
+
+	return cluster
 }
 
 func (e *Environment) teardown() {
