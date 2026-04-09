@@ -49,9 +49,7 @@ jobs:
                 - "--privileged"
               volumes:
                 - "/lib/modules:/lib/modules:ro"
-              # Disable load balancer and registry proxy to reduce memory.
-              loadBalancer:
-                enabled: false
+              # Disable registry proxy to reduce memory.
               registryProxy:
                 enabled: false
           EOF
