@@ -36,7 +36,7 @@ jobs:
           vcluster version
           vcluster use driver docker
 
-      - name: Load kernel modules and write vcluster values
+      - name: Prepare environment
         run: |
           sudo modprobe bridge || true
           sudo modprobe br_netfilter || true
@@ -44,16 +44,10 @@ jobs:
           cat > /tmp/vcluster-values.yaml <<'EOF'
           experimental:
             docker:
-              # Privileged mode + host /lib/modules mount required for
-              # bridge and br_netfilter kernel modules used by the join-node.
               args:
                 - "--privileged"
               volumes:
                 - "/lib/modules:/lib/modules:ro"
-              # All clusters must be on the same Docker network for
-              # cross-cluster LoadBalancer IP routing.
-              network: meshless-e2e
-              # Disable registry proxy to reduce memory.
               registryProxy:
                 enabled: false
           EOF
@@ -93,6 +87,43 @@ jobs:
 
       - name: Create meshless-c
         run: vcluster create meshless-c --driver docker --connect=false -f /tmp/vcluster-values.yaml
+
+      - name: Connect clusters to shared network
+        run: |
+          # Find container names and their bridge network IPs
+          declare -A BRIDGE_IPS SHARED_IPS
+          for name in meshless-a meshless-b meshless-c; do
+            CONTAINER=$(docker ps -q --filter "name=vcluster.cp.${name}" --format "{{.ID}}" 2>/dev/null)
+            [ -z "$CONTAINER" ] && CONTAINER=$(docker ps -q --filter "name=${name}" --format "{{.ID}}" | head -1)
+            [ -z "$CONTAINER" ] && continue
+
+            echo "Connecting $name ($CONTAINER) to meshless-e2e network..."
+            docker network connect meshless-e2e "$CONTAINER"
+
+            # Get the bridge network IP (the non-shared-network IP)
+            BRIDGE_IPS[$name]=$(docker inspect "$CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{if ne $k "meshless-e2e"}}{{$v.IPAddress}}{{end}}{{end}}' 2>/dev/null)
+            SHARED_IPS[$name]=$(docker inspect "$CONTAINER" --format '{{(index .NetworkSettings.Networks "meshless-e2e").IPAddress}}' 2>/dev/null)
+            echo "$name: bridge=${BRIDGE_IPS[$name]} shared=${SHARED_IPS[$name]}"
+          done
+
+          # Add static routes so each cluster can reach other clusters'
+          # LoadBalancer IPs through the shared Docker network.
+          for name in meshless-a meshless-b meshless-c; do
+            CONTAINER=$(docker ps -q --filter "name=vcluster.cp.${name}" --format "{{.ID}}" 2>/dev/null)
+            [ -z "$CONTAINER" ] && CONTAINER=$(docker ps -q --filter "name=${name}" --format "{{.ID}}" | head -1)
+            [ -z "$CONTAINER" ] && continue
+
+            for target in meshless-a meshless-b meshless-c; do
+              [ "$name" = "$target" ] && continue
+              T_BRIDGE=${BRIDGE_IPS[$target]}
+              T_SHARED=${SHARED_IPS[$target]}
+              [ -z "$T_BRIDGE" ] || [ -z "$T_SHARED" ] && continue
+
+              SUBNET=$(echo "$T_BRIDGE" | awk -F. '{print $1"."$2".0.0/16"}')
+              echo "$name: route $SUBNET via $T_SHARED"
+              docker exec "$CONTAINER" ip route add "$SUBNET" via "$T_SHARED" || true
+            done
+          done
 
       - name: Run e2e tests
         run: go test -mod=vendor -tags e2e -v -count=1 -timeout 30m ./test/e2e/
