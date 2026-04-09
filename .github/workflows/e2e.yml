@@ -94,6 +94,7 @@ jobs:
         run: go test -mod=vendor -tags e2e -v -count=1 -timeout 30m ./test/e2e/
         env:
           MESHLESS_CLUSTER_NAMES: "meshless-a,meshless-b,meshless-c"
+          MESHLESS_PROJECT_ROOT: "${{ github.workspace }}"
 
       - if: always()
         name: Cleanup clusters

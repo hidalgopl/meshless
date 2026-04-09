@@ -180,7 +180,7 @@ func buildMeshless(t *testing.T) string {
 	t.Helper()
 
 	bin := filepath.Join(t.TempDir(), "meshless")
-	projectRoot := filepath.Join("..", "..")
+	projectRoot := envOr("MESHLESS_PROJECT_ROOT", filepath.Join("..", ".."))
 	cmd := exec.Command(goBinary, "build", "-C", projectRoot, "-o", bin, "./cmd/meshless")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
