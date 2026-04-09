@@ -40,6 +40,7 @@ jobs:
         run: |
           sudo modprobe bridge || true
           sudo modprobe br_netfilter || true
+          docker network create meshless-e2e || true
           cat > /tmp/vcluster-values.yaml <<'EOF'
           experimental:
             docker:
@@ -49,6 +50,9 @@ jobs:
                 - "--privileged"
               volumes:
                 - "/lib/modules:/lib/modules:ro"
+              # All clusters must be on the same Docker network for
+              # cross-cluster LoadBalancer IP routing.
+              network: meshless-e2e
               # Disable registry proxy to reduce memory.
               registryProxy:
                 enabled: false
@@ -102,3 +106,4 @@ jobs:
           vcluster delete meshless-a --driver docker --ignore-not-found || true
           vcluster delete meshless-b --driver docker --ignore-not-found || true
           vcluster delete meshless-c --driver docker --ignore-not-found || true
+          docker network rm meshless-e2e || true
