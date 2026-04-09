@@ -340,14 +340,11 @@ func (e *Environment) connectToExistingCluster(name string) *Cluster {
 	e.t.Helper()
 	e.t.Logf("connecting to pre-provisioned cluster %s", name)
 
-	defaultKubeconfig := filepath.Join(e.KubeconfigDir, "config")
-
 	out := runOutput(e.t,
 		vclusterBinary, "connect", name,
 		"--driver", "docker",
 		"--print",
 		"--silent",
-		"--kubeconfig", defaultKubeconfig,
 	)
 
 	kubeconfigPath := filepath.Join(e.KubeconfigDir, name+".yaml")
