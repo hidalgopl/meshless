@@ -347,6 +347,10 @@ func (e *Environment) connectToExistingCluster(name string) *Cluster {
 		"--silent",
 	)
 
+	if err := os.MkdirAll(e.KubeconfigDir, 0o755); err != nil {
+		e.t.Fatalf("failed to create kubeconfig dir: %v", err)
+	}
+
 	kubeconfigPath := filepath.Join(e.KubeconfigDir, name+".yaml")
 	if err := os.WriteFile(kubeconfigPath, out, 0o644); err != nil {
 		e.t.Fatalf("failed to write kubeconfig for %s: %v", name, err)
