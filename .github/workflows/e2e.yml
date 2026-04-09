@@ -6,6 +6,7 @@ on:
 
 env:
   GO_VERSION: "1.25"
+  VCLUSTER_VERSION: "v0.33.1"
 
 jobs:
   e2e:
@@ -27,22 +28,58 @@ jobs:
           restore-keys: |
             go-${{ runner.os }}-${{ env.GO_VERSION }}-
 
-      - uses: loft-sh/setup-vind@v1
-        with:
-          name: meshless-a
-          version: v0.31.0
+      - name: Install vcluster
+        run: |
+          curl -L -o /usr/local/bin/vcluster \
+            "https://github.com/loft-sh/vcluster/releases/download/${VCLUSTER_VERSION}/vcluster-linux-amd64"
+          chmod +x /usr/local/bin/vcluster
+          vcluster version
+          vcluster use driver docker
 
-      - uses: loft-sh/setup-vind@v1
-        with:
-          name: meshless-b
-          version: v0.31.0
+      - name: Warm up vcluster (D-Bus race workaround)
+        run: |
+          echo "Creating warm-up cluster to initialize D-Bus..."
+          vcluster create _warmup --driver docker --connect=false || true
 
-      - uses: loft-sh/setup-vind@v1
-        with:
-          name: meshless-c
-          version: v0.31.0
+          CONTAINER=$(docker ps -q --filter "name=vcluster" --filter "status=running" 2>/dev/null | head -1)
+          if [ -z "$CONTAINER" ]; then
+            echo "No running container found, D-Bus may be ready already"
+            vcluster delete _warmup --driver docker --ignore-not-found || true
+            exit 0
+          fi
+
+          echo "Container $CONTAINER found, waiting for D-Bus socket..."
+          for i in $(seq 1 120); do
+            if docker exec "$CONTAINER" test -e /run/dbus/system_bus_socket 2>/dev/null; then
+              echo "D-Bus socket ready after ${i}s"
+              break
+            fi
+            sleep 0.5
+          done
+
+          echo "Re-running install-standalone.sh..."
+          docker exec "$CONTAINER" /install-standalone.sh --skip-download --skip-wait || true
+
+          vcluster delete _warmup --driver docker --ignore-not-found || true
+          echo "Warm-up complete"
+
+      - name: Create meshless-a
+        run: vcluster create meshless-a --driver docker --connect=false
+
+      - name: Create meshless-b
+        run: vcluster create meshless-b --driver docker --connect=false
+
+      - name: Create meshless-c
+        run: vcluster create meshless-c --driver docker --connect=false
 
       - name: Run e2e tests
         run: go test -mod=vendor -tags e2e -v -count=1 -timeout 30m ./test/e2e/
         env:
           MESHLESS_CLUSTER_NAMES: "meshless-a,meshless-b,meshless-c"
+
+      - if: always()
+        name: Cleanup clusters
+        run: |
+          vcluster delete meshless-a --driver docker --ignore-not-found || true
+          vcluster delete meshless-b --driver docker --ignore-not-found || true
+          vcluster delete meshless-c --driver docker --ignore-not-found || true
