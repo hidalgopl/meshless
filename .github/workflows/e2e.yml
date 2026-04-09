@@ -36,16 +36,20 @@ jobs:
           vcluster version
           vcluster use driver docker
 
-      - name: Write vcluster values
+      - name: Load kernel modules and write vcluster values
         run: |
+          sudo modprobe bridge || true
+          sudo modprobe br_netfilter || true
           cat > /tmp/vcluster-values.yaml <<'EOF'
           experimental:
             docker:
-              # Privileged mode required for kernel modules (bridge, br_netfilter)
-              # used by the standalone join-node for pod networking.
+              # Privileged mode + host /lib/modules mount required for
+              # bridge and br_netfilter kernel modules used by the join-node.
               args:
                 - "--privileged"
-              # Disable load balancer and registry proxy to reduce memory footprint.
+              volumes:
+                - "/lib/modules:/lib/modules:ro"
+              # Disable load balancer and registry proxy to reduce memory.
               loadBalancer:
                 enabled: false
               registryProxy:
